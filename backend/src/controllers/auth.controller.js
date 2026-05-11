@@ -1,5 +1,6 @@
 import userModel from "../models/user.model.js"
 import jwt from "jsonwebtoken"
+import { sendEmail } from "../services/mail.service.js"
 
 // ─────────────────────────────────────────────
 // COOKIE CONFIG
@@ -32,6 +33,44 @@ const CLEAR_COOKIE = {
 
 
 // ─────────────────────────────────────────────
+// Verify email
+// ─────────────────────────────────────────────
+
+
+export async function verifyEmail(req, res, next) {
+    const { token } = req.query
+
+    if (!token) {
+        return res.status(400).json({
+            success: false,
+            message: "Token is required"
+        })
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET)
+
+        const user = await userModel.findOne({ _id: decoded.id })
+        console.log('user', decoded.id)
+        console.log('user', user)
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            })
+        }
+
+        user.isVerified = true
+        await user.save()
+
+        return res.send("<h1>Email verified successfully</h1>")
+
+    } catch (error) {
+        next(error)
+    }
+}
+
+// ─────────────────────────────────────────────
 // REGISTER
 // ─────────────────────────────────────────────
 
@@ -51,11 +90,18 @@ export async function register(req, res, next) {
 
         // 3. Create user (password hashing should be in pre-save hook in model)
         const user = await userModel.create({ name, email, password })
-
         // 4. Generate tokens BEFORE hiding password
         const accessToken = user.jwtToken()
         const refreshToken = user.refreshTokenGenerator()
 
+        sendEmail({
+            to: email,
+            subject: "Verify your email",
+            text: `Welcome to our app, ${name}`,
+            html: `<h1>Welcome to our app, ${name}</h1>
+            <p>Click <a href="http://localhost:3000/api/auth/verify-email?token=${refreshToken}">here</a> to verify your email</p>
+            `,
+        })
         // 5. Save hashed refresh token in DB for rotation & revocation
         //    Store only the hash (never the raw token) — just like passwords
         user.refreshToken = refreshToken
@@ -86,7 +132,7 @@ export async function register(req, res, next) {
 // ─────────────────────────────────────────────
 
 export async function login(req, res, next) {
-  
+
 
     const { email, password } = req.body
 
@@ -111,6 +157,12 @@ export async function login(req, res, next) {
             return res.status(401).json({
                 success: false,
                 message: "Invalid email or password"    // same message as above on purpose
+            })
+        }
+        if (!user.isVerified) {
+            return res.status(401).json({
+                success: false,
+                message: "Please verify your email first"
             })
         }
 

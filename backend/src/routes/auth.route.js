@@ -1,9 +1,16 @@
 
 import { Router } from "express"
-import { login, logout, refreshAccessToken, register } from "../controllers/auth.controller.js"
+import { login, logout, refreshAccessToken, register, verifyEmail } from "../controllers/auth.controller.js"
 import { loginValidator, registerValidator } from "../validators/auth.validator.js"
 
 const router = Router()
+
+/**
+ * @METHOD POST
+ * @ROUTE /api/auth/verify-email    
+ */
+router.get("/verify-email", verifyEmail)
+
 
 /**
  * @METHOD POST
